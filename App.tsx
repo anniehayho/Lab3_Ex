@@ -1,130 +1,224 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
+import React, { useCallback, useEffect, useState } from 'react';
+import { FlatList, Text, View, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 
-import React from 'react';
-import type {PropsWithChildren} from 'react';
-import {
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  useColorScheme,
-  View,
-} from 'react-native';
-
-import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
-
-type SectionProps = PropsWithChildren<{
-  title: string;
-}>;
-
-function Section({children, title}: SectionProps): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-  return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
-  );
+interface User {
+  id: string;
+  name: string;
+  phone: string;
 }
 
-function App(): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
+const ContactItem = React.memo(({ name, phone, onPress }: { name: string, phone: string, onPress: () => void }) => (
+  <TouchableOpacity style={styles.item} onPress={onPress}>
+    <Text style={styles.name}>{name}</Text>
+    <Text style={styles.phone}>{phone}</Text>
+  </TouchableOpacity>
+));
 
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
+const App = () => {
+  const [contacts, setContacts] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMoreData, setHasMoreData] = useState(true);
+
+  const fetchContacts = async () => {
+    try {
+      setLoading(true);
+
+      const response = await fetch('https://jsonplaceholder.typicode.com/users');
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      const newContacts = data.map((user: any) => ({
+        id: user.id.toString(),
+        name: user.name,
+        phone: user.phone,
+      }));
+
+      setContacts(newContacts);
+
+      setHasMoreData(false);
+    } catch (error) {
+      console.error('Error fetching contacts:', error);
+      Alert.alert(`Failed to load contacts: ${error instanceof Error ? error.message : 'Unknown error'}`);
+
+      const mockContacts: User[] = [
+        { id: '1', name: 'John Smith', phone: '(123) 456-7890' },
+        { id: '2', name: 'Sarah Johnson', phone: '(234) 567-8901' },
+        { id: '3', name: 'Michael Brown', phone: '(345) 678-9012' },
+        { id: '4', name: 'Emily Davis', phone: '(456) 789-0123' },
+        { id: '5', name: 'David Wilson', phone: '(567) 890-1234' },
+        { id: '6', name: 'Lisa Taylor', phone: '(678) 901-2345' },
+        { id: '7', name: 'Robert Anderson', phone: '(789) 012-3456' },
+        { id: '8', name: 'Jennifer Thomas', phone: '(890) 123-4567' },
+        { id: '9', name: 'Daniel Jackson', phone: '(901) 234-5678' },
+        { id: '10', name: 'Karen White', phone: '(012) 345-6789' },
+      ];
+
+      setContacts(mockContacts);
+      setHasMoreData(false);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  /*
-   * To keep the template simple and small we're adding padding to prevent view
-   * from rendering under the System UI.
-   * For bigger apps the recommendation is to use `react-native-safe-area-context`:
-   * https://github.com/AppAndFlow/react-native-safe-area-context
-   *
-   * You can read more about it here:
-   * https://github.com/react-native-community/discussions-and-proposals/discussions/827
-   */
-  const safePadding = '5%';
+  const loadMoreContacts = () => {
+    if (!hasMoreData || loadingMore) {
+      return;
+    }
+
+    setLoadingMore(true);
+
+    setTimeout(() => {
+      const currentCount = contacts.length;
+      const additionalContacts = Array.from({ length: 5 }, (_, i) => ({
+        id: (currentCount + i + 1).toString(),
+        name: `Additional User ${currentCount + i + 1}`,
+        phone: `(999) ${i}${i}${i}-${i}${i}${i}${i}`,
+      }));
+
+      setContacts(prevContacts => [...prevContacts, ...additionalContacts]);
+      setLoadingMore(false);
+
+      if (contacts.length + additionalContacts.length >= 30) {
+        setHasMoreData(false);
+      }
+    }, 1000);
+  };
+
+  useEffect(() => {
+    fetchContacts();
+  }, []);
+
+  const handlePress = useCallback((name: string) => {
+    Alert.alert(`You clicked on ${name}`);
+  }, []);
+
+  const renderItem = ({ item }: { item: User }) => (
+    <ContactItem
+      name={item.name}
+      phone={item.phone}
+      onPress={() => handlePress(item.name)}
+    />
+  );
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#0000ff" />
+      </View>
+    );
+  }
 
   return (
-    <View style={backgroundStyle}>
-      <StatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
+    <View style={styles.container}>
+      <Text style={styles.header}>Contacts Directory</Text>
+
+      <FlatList
+        data={contacts}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        onEndReached={hasMoreData ? loadMoreContacts : null}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          loadingMore ? (
+            <ActivityIndicator size="small" color="#0000ff" style={styles.loadMoreIndicator} />
+          ) : !hasMoreData && contacts.length > 0 ? (
+            <Text style={styles.endMessage}>No more contacts to load</Text>
+          ) : null
+        }
+        ListEmptyComponent={
+          !loading ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No contacts found</Text>
+              <TouchableOpacity style={styles.retryButton} onPress={fetchContacts}>
+                <Text style={styles.retryText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null
+        }
+        refreshing={loading}
+        onRefresh={fetchContacts}
       />
-      <ScrollView
-        style={backgroundStyle}>
-        <View style={{paddingRight: safePadding}}>
-          <Header/>
-        </View>
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
-            paddingHorizontal: safePadding,
-            paddingBottom: safePadding,
-          }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
-        </View>
-      </ScrollView>
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
+  container: {
+    flex: 1,
+    marginTop: 50,
+    backgroundColor: '#f5f5f5',
   },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
+  header: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#333',
+    padding: 15,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
+    textAlign: 'center',
   },
-  sectionDescription: {
-    marginTop: 8,
+  item: {
+    backgroundColor: '#fff',
+    padding: 20,
+    marginVertical: 8,
+    marginHorizontal: 16,
+    borderRadius: 10,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.41,
+  },
+  name: {
     fontSize: 18,
-    fontWeight: '400',
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 6,
   },
-  highlight: {
-    fontWeight: '700',
+  phone: {
+    fontSize: 16,
+    color: '#666',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+  loadMoreIndicator: {
+    marginVertical: 20,
+  },
+  endMessage: {
+    textAlign: 'center',
+    padding: 20,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  emptyContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 18,
+    color: '#666',
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: '#3498db',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 5,
+  },
+  retryText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
 
